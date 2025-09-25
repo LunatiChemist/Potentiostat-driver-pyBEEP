@@ -155,6 +155,7 @@ pyBEEP/
 │   ├── example_CA_TIA.py
 │   ├── example_CV.py
 │   ├── example_CV_TIA.py
+│   ├── example_EIS.py
 │   ├── example_GCV.py
 │   ├── example_LSV.py
 │   ├── example_OCP.py

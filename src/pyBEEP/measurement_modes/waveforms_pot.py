@@ -4,8 +4,9 @@ from pyBEEP.measurement_modes.waveform_outputs import (
     PotenOutput,
     SteppedPotenOutput,
     CyclicPotenOutput,
+    EisPotenOutput,
 )
-from pyBEEP.utils.constants import POINT_INTERVAL
+from pyBEEP.utils.constants import POINT_INTERVAL, POINT_INTERVAL_EIS
 
 
 def constant_waveform(potential: float, duration: float) -> PotenOutput:
@@ -151,4 +152,41 @@ def cyclic_voltammetry(
         applied_potential=applied_potential,
         time=time,
         cycle=cycle,
+    )
+
+
+def eis_sweep(
+    start_freq: int,
+    end_freq: int,
+    duration: float,
+) -> EisPotenOutput:
+    """
+    Generate a linear voltage sweep waveform.
+
+    Args:
+        start_freq (int): Initial frequency in Hz
+        end_freq (int): End frequency in Hz
+        duration (float): Duration of the seep in seconds
+
+    Returns:
+        CyclicPotenOutput: Pydantic model with:
+            - start_freq (int): Initial frequency in Hz
+            - end_freq (int): End frequency in Hz
+            - duration (float): Duration of the seep in seconds
+    """
+
+    time = np.arange(0, duration + POINT_INTERVAL_EIS, POINT_INTERVAL_EIS)
+
+    # Sweep rate
+    k = (end_freq - start_freq) / duration
+
+    # Command signal
+    applied_potential = np.sin(2 * np.pi * (start_freq * time + 0.5 * k * time**2))
+
+    return EisPotenOutput(
+        applied_potential=applied_potential,
+        time=time,
+        start_freq=start_freq,
+        end_freq=end_freq,
+        duration=duration,
     )

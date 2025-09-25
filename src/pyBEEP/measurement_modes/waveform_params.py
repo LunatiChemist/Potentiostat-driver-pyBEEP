@@ -14,6 +14,12 @@ class PotentialStepsParams(BaseModel):
     step_duration: float
 
 
+class EisSweepParams(BaseModel):
+    start_freq: int
+    end_freq: int
+    duration: float
+
+
 class LinearSweepParams(BaseModel):
     start: float
     end: float

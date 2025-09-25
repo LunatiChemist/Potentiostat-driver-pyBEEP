@@ -7,7 +7,8 @@ from typing import TYPE_CHECKING
 if TYPE_CHECKING:
     import _csv
 
-from pyBEEP.utils.constants import POINT_INTERVAL
+from pyBEEP.utils.constants import POINT_INTERVAL, POINT_INTERVAL_EIS
+from pyBEEP.measurement_modes.waveforms_pot import EisPotenOutput
 
 logger = logging.getLogger(__name__)
 
@@ -38,14 +39,24 @@ class DataLogger:
         self.filepath = filepath
         self.waveform = waveform
         self.metadata_keys = list(waveform.model_fields.keys())
+
+        if isinstance(waveform, EisPotenOutput):
+            self.potentiostat_sampling = POINT_INTERVAL
+        else:
+            self.potentiostat_sampling = POINT_INTERVAL_EIS
+
         if sampling_interval is not None:
-            if sampling_interval < POINT_INTERVAL:
+            if sampling_interval < self.potentiostat_sampling:
                 logger.warning(
                     "Introduced sampling interval is bellow maximum BEEP resolution\n"
                 )
-                logger.warning(f"Sampling intervalas changed to: {POINT_INTERVAL} s")
-                sampling_interval = POINT_INTERVAL
-            self.reducing_factor = int(round(sampling_interval / POINT_INTERVAL))
+                logger.warning(
+                    f"Sampling interval changed to: {self.potentiostat_sampling} s"
+                )
+                sampling_interval = self.potentiostat_sampling
+            self.reducing_factor = int(
+                round(sampling_interval / self.potentiostat_sampling)
+            )
         else:
             self.reducing_factor = 1
         logger.info(f"Reducing factor applied: {self.reducing_factor}")
@@ -98,11 +109,21 @@ class DataLogger:
         factor = self.reducing_factor
         n = len(buffer)
         new_idx = data_idx + n
-        measured = np.array(buffer)  # shape (N, 2) = [Current (A), Potential (V)]
+        measured = np.array(
+            buffer
+        )  # shape (N, 3) = [Current (A), Potential (V). Time (s)]
         current = measured[:, 0].reshape(-1, 1)
         potential = measured[:, 1].reshape(-1, 1)
+        time = measured[:, 2].reshape(-1, 1)
 
-        skip_keys = {"current_steps", "duration_steps", "length_steps"}
+        skip_keys = {
+            "current_steps",
+            "duration_steps",
+            "length_steps",
+            "start_freq",
+            "end_freq",
+            "duration",
+        }
         metadata = {}
         if self.waveform:
             for key in self.metadata_keys:
@@ -118,6 +139,7 @@ class DataLogger:
         )
         potential = potential[:min_len]
         current = current[:min_len]
+        time = time[:min_len]
         exp_num = np.ones((min_len, 1), dtype=int)
         for k in metadata:
             metadata[k] = metadata[k][:min_len]
@@ -125,9 +147,8 @@ class DataLogger:
         # Build ordered columns
         ordered_cols = []
         col_names = []
-        if "time" in metadata:
-            ordered_cols.append(metadata.pop("time"))
-            col_names.append("Time (s)")
+        ordered_cols.append(time)
+        col_names.append("Time (s)")
         ordered_cols.append(potential)
         col_names.append("Potential (V)")
         ordered_cols.append(current)
@@ -140,6 +161,9 @@ class DataLogger:
             col_names.append("Step")
         ordered_cols.append(exp_num)
         col_names.append("Exp")
+        if "time" in metadata:
+            ordered_cols.append(metadata.pop("time"))
+            col_names.append("Applied Time (s)")
         if "applied_potential" in metadata:
             ordered_cols.append(metadata.pop("applied_potential"))
             col_names.append("Applied potential (V)")

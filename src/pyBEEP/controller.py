@@ -15,6 +15,7 @@ from pyBEEP.measurement_modes.waveform_outputs import (
     GalvanoOutput,
     PotenOutput,
     BaseOuput,
+    EisPotenOutput,
 )
 from pyBEEP.measurement_modes.waveforms_ocp import ocp_waveform
 from pyBEEP.utils.utils import (
@@ -27,6 +28,7 @@ from pyBEEP.measurement_modes.waveforms_pot import (
     linear_sweep,
     cyclic_voltammetry,
     potential_steps,
+    eis_sweep,
 )
 from pyBEEP.measurement_modes.waveforms_gal import (
     single_point,
@@ -39,11 +41,13 @@ from pyBEEP.utils.constants import (
     REG_READ_ADDR,
     REG_WRITE_ADDR_PID,
     REG_WRITE_ADDR_POT,
+    REG_WRITE_ADDR_CMD,
     BUSSY_DLAY_NS,
 )
 from pyBEEP.measurement_modes.waveform_params import (
     ConstantWaveformParams,
     PotentialStepsParams,
+    EisSweepParams,
     LinearSweepParams,
     CyclicVoltammetryParams,
     SinglePointParams,
@@ -98,6 +102,12 @@ class PotentiostatController:
                 "mode_type": ControlMode.POT,
                 "waveform_func": potential_steps,
                 "param_class": PotentialStepsParams,
+                "pid": False,
+            },
+            "EIS": {
+                "mode_type": ControlMode.POT,
+                "waveform_func": eis_sweep,
+                "param_class": EisSweepParams,
                 "pid": False,
             },
             "CP": {
@@ -233,7 +243,11 @@ class PotentiostatController:
             )
 
     def _setup_measurement(
-        self, tia_gain: int | None, clear_fifo: bool = False, fifo_start: bool = False
+        self,
+        tia_gain: int | None,
+        clear_fifo: bool = False,
+        fifo_start: bool = False,
+        eis_start: bool = False,
     ):
         """
         Configure and initialize the potentiostat hardware for a new measurement.
@@ -242,6 +256,7 @@ class PotentiostatController:
             tia_gain (int): Transimpedance amplifier gain setting.
             clear_fifo (bool, optional): Whether to clear the FIFO buffer before starting. Defaults to False.
             fifo_start (bool, optional): Whether to start the FIFO immediately. Defaults to False.
+            eis_start (bool, optional): Whether to start the EIS mode immediately. Defaults to False.
         """
         if tia_gain is not None:
             self.device.send_command(CMD["SET_TIA_GAIN"], tia_gain)
@@ -249,6 +264,11 @@ class PotentiostatController:
             self.device.send_command(CMD["CLEAR_FIFO"], 1)
         if fifo_start:
             self.device.send_command(CMD["FIFO_START"], 1)
+        if eis_start:
+            self.device.send_command(CMD["EIS_START"], 1)
+        else:
+            self.device.send_command(CMD["EIS_START"], 0)
+
         self.device.send_command(CMD["SET_SWITCH"], 1)
 
     def _run_measurement(
@@ -405,7 +425,6 @@ class PotentiostatController:
             "rd_err_cnt": 0,
             "wr_dly_st": 0,
             "rd_dly_st": 0,
-            "rx_tx_reg": 0,
             "wr_tx_reg": 0,
             "rd_tx_reg": 0,
             "transmission_st": monotonic_ns(),
@@ -419,6 +438,7 @@ class PotentiostatController:
             rd_data = self._read_operation(st, params, n_register)
             if rd_data:
                 rd_list = convert_uint16_to_float32(rd_data)
+                rd_list = np.reshape(rd_list, (-1, 3))
                 data_queue.put(rd_list)
                 params["rd_tx_reg"] += len(rd_list)
                 params["rd_err_cnt"] = 0
@@ -426,10 +446,7 @@ class PotentiostatController:
         self._teardown_measurement()
         total_time_ns = monotonic_ns() - global_start_ns
         result_tm = total_time_ns / 1e9
-        data_rate = (2 * params["rx_tx_reg"]) / result_tm
-        logger.info(
-            f"\nTotal transmission time {result_tm:3.4} s, data rate {(data_rate / 1000):3.4} KBytes/s.\n"
-        )
+        logger.info(f"\nTotal transmission time {result_tm:3.4} s\n")
         logger.info(f"Failed reading: {params['rd_err_cnt']}")
 
     def _read_write_data_pid_active(
@@ -473,7 +490,6 @@ class PotentiostatController:
             "rd_err_cnt": 0,
             "wr_dly_st": 0,
             "rd_dly_st": 0,
-            "rx_tx_reg": 0,
             "wr_tx_reg": 0,
             "rd_tx_reg": 0,
             "transmission_st": monotonic_ns(),
@@ -503,6 +519,7 @@ class PotentiostatController:
                 rd_data = self._read_operation(st, params, n_register)
                 if rd_data:
                     rd_list = convert_uint16_to_float32(rd_data)
+                    rd_list = np.reshape(rd_list, (-1, 3))
                     data_queue.put(rd_list)
                     params["rd_tx_reg"] += len(rd_list)
                     params["rd_err_cnt"] = 0
@@ -511,10 +528,7 @@ class PotentiostatController:
 
         total_time_ns = monotonic_ns() - global_start_ns
         result_tm = total_time_ns / 1e9
-        data_rate = (2 * params["rx_tx_reg"]) / result_tm
-        logger.info(
-            f"\nTotal transmission time {result_tm:3.4} s, data rate {(data_rate / 1000):3.4} KBytes/s.\n"
-        )
+        logger.info(f"\nTotal transmission time {result_tm:3.4} s\n")
         logger.info(f"Failed writing: {params['wr_err_cnt']}")
         logger.info(f"Failed reading: {params['rd_err_cnt']}")
         logger.info(
@@ -548,10 +562,10 @@ class PotentiostatController:
            - The writing and reading of data is performed in a loop until all the data list created is sent.
              In this loop, a try-except clause is used for both writing and reading. No delays for writing or reading
              are applied, it will always keep trying to send and read data. Once all input voltage list is consumed,
-             it will attept to read the FIFO 3 more times, to make sure all data is collected.
+             it will attempt to read the FIFO 3 more times, to make sure all data is collected.
            - When reading, the output data is converted back from uint16 to np.float32 and added to 'data_queue'.
-           - The 'data_queue' consist of a np.ndarray: A numpy array where each element is a pair of float values:
-             [potential (in V), current (in A)]
+           - The 'data_queue' consist of a np.ndarray: A numpy array where each element is a triplet of float values:
+             [potential (in V), current (in A), time (in us)]
            - Once the measurement is finished, potentiostat is switched off and adc_data list is returned.
 
         Notes:
@@ -570,7 +584,6 @@ class PotentiostatController:
             "rd_err_cnt": 0,
             "wr_dly_st": 0,
             "rd_dly_st": 0,
-            "rx_tx_reg": 0,
             "wr_tx_reg": 0,
             "rd_tx_reg": 0,
             "transmission_st": monotonic_ns(),
@@ -582,60 +595,92 @@ class PotentiostatController:
         logger.debug(f"Write list element count {len(write_list)}.")
         n_items = len(write_list)
         logger.info(f"Total items to write: {n_items} uint16, {n_items // 2} float32,")
-        for i in waveform.model_fields:
-            value = getattr(waveform, i)
-            logger.debug(f"Waveform {i}: {value.shape}, {value.dtype}")
-            logger.debug(f"Waveform {i} first 10 values: {value[:10]}")
-        logger.debug(f"Write list first 10 values: {write_list[:10]}")
 
-        self._setup_measurement(tia_gain=tia_gain, clear_fifo=True, fifo_start=True)
+        if not isinstance(waveform, EisPotenOutput):
+            for i in waveform.model_fields:
+                value = getattr(waveform, i)
+                logger.debug(f"Waveform {i}: {value.shape}, {value.dtype}")
+                logger.debug(f"Waveform {i} first 10 values: {value[:10]}")
+            logger.debug(f"Write list first 10 values: {write_list[:10]}")
+
+            eis_start = False
+        else:
+            target = np.array(
+                [waveform.start_freq, waveform.end_freq, waveform.duration],
+                dtype=np.float32,
+            ).tobytes(order="C")
+            target = np.frombuffer(target, np.uint16).tolist()
+            self.device.write_data(
+                REG_WRITE_ADDR_CMD, [CMD["EIS_CFG"]] + target
+            )  # Send data
+
+            eis_start = True
+
+        self._setup_measurement(
+            tia_gain=tia_gain, clear_fifo=True, fifo_start=True, eis_start=eis_start
+        )
 
         # Send and collect data
         i = 0
         params["transmission_st"] = monotonic_ns()
 
-        post_read_attempts = 0
-        while (post_read_attempts < 3) or (
-            (params["rd_tx_reg"] / params["wr_tx_reg"] / 2) < 1.0
-        ):
+        current_time = 0
+        final_time = waveform.time[-1]
+        b_first = 0
+        time_init = 0
+
+        while current_time < final_time:
             st = monotonic_ns()
-            if i < n_items:  # Writing
-                data = write_list[i : i + n_register].tolist()
-                try:
-                    if (st - params["wr_dly_st"] * 0) > params["busy_dly_ns"]:
-                        self.device.write_data(REG_WRITE_ADDR_POT, data)
-                        params["wr_err_cnt"] = 0
-                        params["wr_tx_reg"] += n_register
-                        i += n_register
-                except Exception as e:
-                    params["wr_dly_st"] = monotonic_ns()
-                    params["wr_err_cnt"] += 1
-                    if params["wr_err_cnt"] > 10:
-                        logger.error(
-                            f"Writing errors exceeded the limit, potentiostat not responding. Last error: {e}"
-                        )
-                        raise
-            # We need read two times for each write time because adc push two values to FIFO
-            for _ in range(0, 2):
-                rd_data = self._read_operation(st, params, n_register)
-                if rd_data:
-                    rd_list = convert_uint16_to_float32(rd_data)
-                    data_queue.put(rd_list)
-                    params["rd_tx_reg"] += len(rd_data)
-                    params["rd_err_cnt"] = 0
-            if i >= n_items:
-                post_read_attempts += 1
+
+            if not isinstance(waveform, EisPotenOutput):
+                if i < n_items:  # Writing
+                    data = write_list[i : i + n_register].tolist()
+                    try:
+                        if (st - params["wr_dly_st"] * 0) > params["busy_dly_ns"]:
+                            self.device.write_data(REG_WRITE_ADDR_POT, data)
+                            params["wr_err_cnt"] = 0
+                            params["wr_tx_reg"] += n_register
+                            i += n_register
+                    except Exception as e:
+                        params["wr_dly_st"] = monotonic_ns()
+                        params["wr_err_cnt"] += 1
+                        if params["wr_err_cnt"] > 10:
+                            logger.error(
+                                f"Writing errors exceeded the limit, potentiostat not responding. Last error: {e}"
+                            )
+                            raise
+            else:
+                i += n_register
+
+            rd_data = self._read_operation(st, params, n_register)
+            if rd_data:
+                rd_list = convert_uint16_to_float32(rd_data)
+                rd_list = np.reshape(rd_list, (-1, 3))
+                time = rd_list[:, 2]
+
+                if b_first == 0:
+                    time_init = time[0]
+                    b_first = 1
+
+                time = (time - time_init) / 1000 / 1000  # Conversion from us to s
+                current_time = time[-1]
+                rd_list_update = rd_list.copy()
+                rd_list_update[:, 2] = time
+
+                data_queue.put(rd_list_update)
+                params["rd_tx_reg"] += len(rd_data)
+                params["rd_err_cnt"] = 0
 
         self._teardown_measurement()
 
         result_tm = (monotonic_ns() - params["transmission_st"]) / 1e9
-        data_rate = (2 * params["rx_tx_reg"]) / result_tm
-        logger.info(
-            f"\nTotal transmission time {result_tm:3.4} s, data rate {(data_rate / 1000):3.4} KBytes/s.\n"
-        )
-        logger.info(
-            f"Send: {params['wr_tx_reg']}, Read: {params['rd_tx_reg']}, Read/Sent/2: {params['rd_tx_reg'] / params['wr_tx_reg'] / 2}\n"
-        )
+        logger.info(f"\nTotal transmission time {result_tm:3.4} s\n")
+        if params["wr_tx_reg"] != 0:
+            logger.info(
+                f"Send: {params['wr_tx_reg']}, Read: {params['rd_tx_reg']}, Read/Sent/2: {params['rd_tx_reg'] / params['wr_tx_reg'] / 2}\n"
+            )
+        else:
+            logger.info(f"Send: {params['wr_tx_reg']}, Read: {params['rd_tx_reg']}\n")
         logger.info(
             f"Actual points expected to read: {2 * params['wr_tx_reg']}, actual read: {params['rd_tx_reg']}, extra read operations: {int((params['rd_tx_reg'] - params['wr_tx_reg'] * 2) / 120)}\n"
         )

@@ -78,4 +78,4 @@ def convert_uint16_to_float32(rd_data):
     adc_words = np.array(rd_data).astype(np.uint16)
     adc_bytes = adc_words.tobytes()
     rd_list = np.frombuffer(adc_bytes, np.float32)
-    return np.reshape(rd_list, (-1, 2))
+    return rd_list

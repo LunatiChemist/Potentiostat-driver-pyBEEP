@@ -27,6 +27,12 @@ class CyclicPotenOutput(PotenOutput):
     cycle: NDArrayInt = Field(..., description="Cycle, shape (N,)")
 
 
+class EisPotenOutput(PotenOutput):
+    start_freq: int
+    end_freq: int
+    duration: float
+
+
 class GalvanoOutput(BaseOuput):
     applied_current: NDArrayFloat = Field(
         ..., description="Applied Current (A), shape (N,)"
