@@ -119,3 +119,33 @@ def plot_cv_cycles(
     if figpath:
         fig.savefig(figpath)
     plt.close(fig)
+
+
+def plot_eis_impedance(
+    filepaths: str | list[str],
+    figpath: str | None = None,
+    show: bool = False,
+):
+    """
+    Plot Impedance for EIS
+    """
+    if isinstance(filepaths, str):
+        filepaths = [filepaths]
+
+    fig = plt.figure(figsize=(10, 10))
+    plt.title("Electrochemical Impedance Spectroscopy")
+
+    for fp in filepaths:
+        data = pd.read_csv(fp)
+        plt.plot(data["Impedance Re"], data["Impedance Im"])
+
+    plt.xlabel("Impedance Re")
+    plt.ylabel("Impedance Im")
+
+    plt.tight_layout(rect=(0, 0, 1, 0.96))
+
+    if show:
+        plt.show()
+    if figpath:
+        fig.savefig(figpath)
+    plt.close(fig)

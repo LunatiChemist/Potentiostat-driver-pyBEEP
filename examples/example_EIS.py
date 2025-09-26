@@ -1,7 +1,7 @@
 import os
 import logging
 from pyBEEP import (
-    plot_time_series,
+    plot_eis_impedance,
     setup_logging,
     connect_to_potentiostat,
 )
@@ -16,11 +16,13 @@ os.makedirs(folder, exist_ok=True)
 # --- Electrochemical Impedance Spectroscopy (EIS) ---
 eis_file = os.path.join(folder, "test_EIS.csv")
 
-start_freq: int
-end_freq: int
-duration: float
-
-eis_params = {"start_freq": 1000, "end_freq": 100, "duration": 5}
+eis_params = {
+    "start_freq": 1000,
+    "end_freq": 10,
+    "dc_potential": 5,
+    "perturbation_potential": 0.01,
+    "point_per_decade": 10,
+}
 controller.apply_measurement(
     mode="EIS",
     params=eis_params,
@@ -29,4 +31,4 @@ controller.apply_measurement(
     folder=folder,
 )
 
-plot_time_series(eis_file, figpath=eis_file.replace(".csv", ".png"), show=True)
+plot_eis_impedance(eis_file, figpath=eis_file.replace(".csv", ".png"), show=True)

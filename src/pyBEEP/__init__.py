@@ -25,7 +25,12 @@ from pyBEEP.controller import (
     connect_to_potentiostats,
 )
 from pyBEEP.device import PotentiostatDevice
-from pyBEEP.plotter import plot_time_series, plot_cv_cycles, plot_iv_curve
+from pyBEEP.plotter import (
+    plot_time_series,
+    plot_cv_cycles,
+    plot_iv_curve,
+    plot_eis_impedance,
+)
 from pyBEEP.utils import setup_logging
 from pyBEEP.gui import launch_GUI
 
@@ -35,6 +40,7 @@ __all__ = [
     "plot_time_series",
     "plot_cv_cycles",
     "plot_iv_curve",
+    "plot_eis_impedance",
     "setup_logging",
     "launch_GUI",
     "connect_to_potentiostat",

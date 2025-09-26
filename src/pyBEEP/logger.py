@@ -122,7 +122,9 @@ class DataLogger:
             "length_steps",
             "start_freq",
             "end_freq",
-            "duration",
+            "dc_potential",
+            "perturbation_potential",
+            "point_per_decade",
         }
         metadata = {}
         if self.waveform:
@@ -147,29 +149,37 @@ class DataLogger:
         # Build ordered columns
         ordered_cols = []
         col_names = []
-        ordered_cols.append(time)
-        col_names.append("Time (s)")
-        ordered_cols.append(potential)
-        col_names.append("Potential (V)")
-        ordered_cols.append(current)
-        col_names.append("Current (A)")
-        if "cycle" in metadata:
-            ordered_cols.append(metadata.pop("cycle"))
-            col_names.append("Cycle")
-        if "step" in metadata:
-            ordered_cols.append(metadata.pop("step"))
-            col_names.append("Step")
-        ordered_cols.append(exp_num)
-        col_names.append("Exp")
-        if "time" in metadata:
-            ordered_cols.append(metadata.pop("time"))
-            col_names.append("Applied Time (s)")
-        if "applied_potential" in metadata:
-            ordered_cols.append(metadata.pop("applied_potential"))
-            col_names.append("Applied potential (V)")
-        elif "applied_current" in metadata:
-            ordered_cols.append(metadata.pop("applied_current"))
-            col_names.append("Applied current (A)")
+        if "start_freq" in self.metadata_keys:
+            ordered_cols.append(current)
+            col_names.append("Frequency (Hz)")
+            ordered_cols.append(potential)
+            col_names.append("Impedance Re")
+            ordered_cols.append(time)
+            col_names.append("Impedance Im")
+        else:
+            ordered_cols.append(time)
+            col_names.append("Time (s)")
+            ordered_cols.append(potential)
+            col_names.append("Potential (V)")
+            ordered_cols.append(current)
+            col_names.append("Current (A)")
+            if "cycle" in metadata:
+                ordered_cols.append(metadata.pop("cycle"))
+                col_names.append("Cycle")
+            if "step" in metadata:
+                ordered_cols.append(metadata.pop("step"))
+                col_names.append("Step")
+            ordered_cols.append(exp_num)
+            col_names.append("Exp")
+            if "time" in metadata:
+                ordered_cols.append(metadata.pop("time"))
+                col_names.append("Applied Time (s)")
+            if "applied_potential" in metadata:
+                ordered_cols.append(metadata.pop("applied_potential"))
+                col_names.append("Applied potential (V)")
+            elif "applied_current" in metadata:
+                ordered_cols.append(metadata.pop("applied_current"))
+                col_names.append("Applied current (A)")
 
         enriched_buffer = np.hstack(ordered_cols)
 

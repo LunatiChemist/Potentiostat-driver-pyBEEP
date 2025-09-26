@@ -411,6 +411,22 @@ class PotentiostatController:
                 raise
         return None
 
+    def _read_operation2(
+        self,
+        st: int,
+        params: dict,
+        n_register: int | None,
+    ) -> list | None:
+        try:
+            if (st - params["rd_dly_st"] * 0) > params["busy_dly_ns"]:
+                rd_data = self.device.read_data(
+                    REG_READ_ADDR, n_register
+                )  # Collect data
+                return rd_data
+        except Exception:
+            pass
+        return None
+
     def _read_write_ocp(
         self,
         data_queue: Queue,
@@ -589,50 +605,38 @@ class PotentiostatController:
             "transmission_st": monotonic_ns(),
         }
 
-        # Generate numpy array to send
-        y_bytes = waveform.applied_potential.tobytes(order="C")
-        write_list = np.frombuffer(y_bytes, np.uint16)
-        logger.debug(f"Write list element count {len(write_list)}.")
-        n_items = len(write_list)
-        logger.info(f"Total items to write: {n_items} uint16, {n_items // 2} float32,")
-
         if not isinstance(waveform, EisPotenOutput):
+            # Generate numpy array to send
+            y_bytes = waveform.applied_potential.tobytes(order="C")
+            write_list = np.frombuffer(y_bytes, np.uint16)
+            logger.debug(f"Write list element count {len(write_list)}.")
+            n_items = len(write_list)
+            logger.info(
+                f"Total items to write: {n_items} uint16, {n_items // 2} float32,"
+            )
+
             for i in waveform.model_fields:
                 value = getattr(waveform, i)
                 logger.debug(f"Waveform {i}: {value.shape}, {value.dtype}")
                 logger.debug(f"Waveform {i} first 10 values: {value[:10]}")
             logger.debug(f"Write list first 10 values: {write_list[:10]}")
 
-            eis_start = False
-        else:
-            target = np.array(
-                [waveform.start_freq, waveform.end_freq, waveform.duration],
-                dtype=np.float32,
-            ).tobytes(order="C")
-            target = np.frombuffer(target, np.uint16).tolist()
-            self.device.write_data(
-                REG_WRITE_ADDR_CMD, [CMD["EIS_CFG"]] + target
-            )  # Send data
+            self._setup_measurement(
+                tia_gain=tia_gain, clear_fifo=True, fifo_start=True, eis_start=False
+            )
 
-            eis_start = True
+            # Send and collect data
+            i = 0
+            params["transmission_st"] = monotonic_ns()
 
-        self._setup_measurement(
-            tia_gain=tia_gain, clear_fifo=True, fifo_start=True, eis_start=eis_start
-        )
+            current_time = 0
+            final_time = waveform.time[-1]
+            b_first = 0
+            time_init = 0
 
-        # Send and collect data
-        i = 0
-        params["transmission_st"] = monotonic_ns()
+            while current_time < final_time:
+                st = monotonic_ns()
 
-        current_time = 0
-        final_time = waveform.time[-1]
-        b_first = 0
-        time_init = 0
-
-        while current_time < final_time:
-            st = monotonic_ns()
-
-            if not isinstance(waveform, EisPotenOutput):
                 if i < n_items:  # Writing
                     data = write_list[i : i + n_register].tolist()
                     try:
@@ -649,41 +653,74 @@ class PotentiostatController:
                                 f"Writing errors exceeded the limit, potentiostat not responding. Last error: {e}"
                             )
                             raise
-            else:
-                i += n_register
 
-            rd_data = self._read_operation(st, params, n_register)
-            if rd_data:
-                rd_list = convert_uint16_to_float32(rd_data)
-                rd_list = np.reshape(rd_list, (-1, 3))
-                time = rd_list[:, 2]
+                rd_data = self._read_operation(st, params, n_register)
+                if rd_data:
+                    rd_list = convert_uint16_to_float32(rd_data)
+                    rd_list = np.reshape(rd_list, (-1, 3))
+                    time = rd_list[:, 2]
 
-                if b_first == 0:
-                    time_init = time[0]
-                    b_first = 1
+                    if b_first == 0:
+                        time_init = time[0]
+                        b_first = 1
 
-                time = (time - time_init) / 1000 / 1000  # Conversion from us to s
-                current_time = time[-1]
-                rd_list_update = rd_list.copy()
-                rd_list_update[:, 2] = time
+                    time = (time - time_init) / 1000 / 1000  # Conversion from us to s
+                    current_time = time[-1]
+                    rd_list_update = rd_list.copy()
+                    rd_list_update[:, 2] = time
 
-                data_queue.put(rd_list_update)
-                params["rd_tx_reg"] += len(rd_data)
-                params["rd_err_cnt"] = 0
+                    data_queue.put(rd_list_update)
+                    params["rd_tx_reg"] += len(rd_data)
+                    params["rd_err_cnt"] = 0
 
-        self._teardown_measurement()
+            self._teardown_measurement()
 
-        result_tm = (monotonic_ns() - params["transmission_st"]) / 1e9
-        logger.info(f"\nTotal transmission time {result_tm:3.4} s\n")
-        if params["wr_tx_reg"] != 0:
+            result_tm = (monotonic_ns() - params["transmission_st"]) / 1e9
+            logger.info(f"\nTotal transmission time {result_tm:3.4} s\n")
             logger.info(
                 f"Send: {params['wr_tx_reg']}, Read: {params['rd_tx_reg']}, Read/Sent/2: {params['rd_tx_reg'] / params['wr_tx_reg'] / 2}\n"
             )
+            logger.info(
+                f"Actual points expected to read: {2 * params['wr_tx_reg']}, actual read: {params['rd_tx_reg']}, extra read operations: {int((params['rd_tx_reg'] - params['wr_tx_reg'] * 2) / 120)}\n"
+            )
         else:
-            logger.info(f"Send: {params['wr_tx_reg']}, Read: {params['rd_tx_reg']}\n")
-        logger.info(
-            f"Actual points expected to read: {2 * params['wr_tx_reg']}, actual read: {params['rd_tx_reg']}, extra read operations: {int((params['rd_tx_reg'] - params['wr_tx_reg'] * 2) / 120)}\n"
-        )
+            target = np.array(
+                [
+                    waveform.start_freq,
+                    waveform.end_freq,
+                    waveform.dc_potential,
+                    waveform.perturbation_potential,
+                ],
+                dtype=np.float32,
+            ).tobytes(order="C")
+            target = np.frombuffer(target, np.uint16).tolist()
+            target.append(waveform.point_per_decade)
+            self.device.write_data(
+                REG_WRITE_ADDR_CMD, [CMD["EIS_CFG"]] + target
+            )  # Send data
+
+            self._setup_measurement(
+                tia_gain=tia_gain, clear_fifo=True, fifo_start=True, eis_start=True
+            )
+
+            current_freq = waveform.start_freq
+            while current_freq > waveform.end_freq:
+                st = monotonic_ns()
+                rd_data = self._read_operation2(st, params, n_register)
+                if rd_data:
+                    rd_list = convert_uint16_to_float32(rd_data)
+                    rd_list = np.reshape(rd_list, (-1, 3))
+                    freq = rd_list[:, 0]
+                    current_freq = freq[-1]
+                    if current_freq < waveform.end_freq:
+                        rd_list = rd_list[freq >= waveform.end_freq, :]
+                    data_queue.put(rd_list)
+                    params["rd_tx_reg"] += len(rd_data)
+                    params["rd_err_cnt"] = 0
+
+            self._teardown_measurement()
+
+            logger.info(f"Read: {params['rd_tx_reg']}\n")
 
 
 def connect_to_potentiostat():

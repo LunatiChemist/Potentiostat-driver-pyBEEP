@@ -15,9 +15,11 @@ class PotentialStepsParams(BaseModel):
 
 
 class EisSweepParams(BaseModel):
-    start_freq: int
-    end_freq: int
-    duration: float
+    start_freq: float
+    end_freq: float
+    dc_potential: float
+    perturbation_potential: float
+    point_per_decade: int
 
 
 class LinearSweepParams(BaseModel):

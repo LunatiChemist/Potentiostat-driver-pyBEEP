@@ -156,37 +156,42 @@ def cyclic_voltammetry(
 
 
 def eis_sweep(
-    start_freq: int,
-    end_freq: int,
-    duration: float,
+    start_freq: float,
+    end_freq: float,
+    dc_potential: float,
+    perturbation_potential: float,
+    point_per_decade: int,
 ) -> EisPotenOutput:
     """
     Generate a linear voltage sweep waveform.
 
     Args:
-        start_freq (int): Initial frequency in Hz
-        end_freq (int): End frequency in Hz
-        duration (float): Duration of the seep in seconds
+        start_freq (float): Initial frequency in Hz (higher freq)
+        end_freq (float): End frequency in Hz (lower freq)
+        dc_potential (float): Constant potential in V around which the perturbation are made
+        perturbation_potential (float): Potential amplitude in V of the perturbation
+        point_per_decade (int): Number of frequency analyzed by decade
 
     Returns:
-        CyclicPotenOutput: Pydantic model with:
-            - start_freq (int): Initial frequency in Hz
-            - end_freq (int): End frequency in Hz
-            - duration (float): Duration of the seep in seconds
+        EisPotenOutput: Pydantic model with:
+            - applied_potential (np.ndarray): Empty array, shape (N,)
+            - time (np.ndarray): Empty array, shape (N,)
+            - start_freq (float): Initial frequency in Hz (Higher freq)
+            - end_freq (float): End frequency in Hz (lower freq)
+            - dc_potential (float): Constant potential in V around which the perturbation are made
+            - perturbation_potential (float): Potential amplitude in V of the perturbation
+            - point_per_decade (int): Number of frequency analyzed by decade
     """
 
-    time = np.arange(0, duration + POINT_INTERVAL_EIS, POINT_INTERVAL_EIS)
-
-    # Sweep rate
-    k = (end_freq - start_freq) / duration
-
-    # Command signal
-    applied_potential = np.sin(2 * np.pi * (start_freq * time + 0.5 * k * time**2))
+    time = np.arange(0, 1, POINT_INTERVAL_EIS)
+    applied_potential = np.arange(0, 1, POINT_INTERVAL_EIS)
 
     return EisPotenOutput(
         applied_potential=applied_potential,
         time=time,
         start_freq=start_freq,
         end_freq=end_freq,
-        duration=duration,
+        dc_potential=dc_potential,
+        perturbation_potential=perturbation_potential,
+        point_per_decade=point_per_decade,
     )
