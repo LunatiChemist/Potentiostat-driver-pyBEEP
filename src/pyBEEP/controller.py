@@ -651,7 +651,7 @@ def connect_to_potentiostat():
 
     for port in ports:
         if (port.vid == 2022) and (port.pid == 22099):
-            device = PotentiostatDevice(port=port.name, address=1)
+            device = PotentiostatDevice(port=port.device, address=1)
             break
 
     if device is None:
@@ -676,10 +676,10 @@ def connect_to_potentiostats():
     for port in ports:
         if (port.vid == 2022) and (port.pid == 22099):
             try:
-                device = PotentiostatDevice(port=port.name, address=1)
+                device = PotentiostatDevice(port=port.device, address=1)
                 list_controller.append(PotentiostatController(device=device))
             except ConnectionError:
-                print(f"Failed to connect to {port.name}")
+                print(f"Failed to connect to {port.device}")
 
     if len(list_controller) == 0:
         raise ConnectionError(
