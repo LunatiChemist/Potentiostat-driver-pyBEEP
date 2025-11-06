@@ -1,0 +1,2 @@
+[console_scripts]
+pyBEEP_GUI = pyBEEP.gui.main_window:launch_GUI

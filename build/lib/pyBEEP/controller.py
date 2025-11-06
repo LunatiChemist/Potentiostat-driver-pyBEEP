@@ -381,8 +381,8 @@ class PotentiostatController:
                 from pyBEEP.utils.postprocess.CdlAnalysis import estimate_cdl_from_csv
                 result = estimate_cdl_from_csv(
                     filepath,
-                    vertex_a = getattr(params, "vertex_a", 0.0),
-                    vertex_b = getattr(params, "vertex_a", 0.0),
+                    vertex_a=params.vertex_a,
+                    vertex_b=params.vertex_b,
                 )
                 logger.info(
                     f"Cdl (mean ± std): {result['cdl_mean']:.3e} F ± {result['cdl_std']:.3e} "
