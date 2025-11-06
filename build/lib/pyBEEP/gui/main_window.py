@@ -201,14 +201,26 @@ class GUI:
         for i, param in enumerate(self.parameters_list):
             value = self.parameters_values[i].get()
             if value == "":
-                messagebox.showerror("Error", "Please fill all the parameters")
-                return
+                if self.parameters_list_type[i] == "Optional":
+                    pass
+                else:
+                    messagebox.showerror("Error", "Please fill all the parameters")
+                    return
             if self.parameters_list_type[i] == "float":
                 self.param[param] = float(value)
             elif self.parameters_list_type[i] == "int":
                 self.param[param] = int(float(value))
             elif self.parameters_list_type[i] == "List":
-                self.param[param] = ast.literal_eval(value)
+                val = ast.literal_eval(value)
+                if not isinstance(val, list):
+                    messagebox.showerror("Error", f"{param} (List): {val}, is not a List Type")
+                    return
+                self.param[param] = val
+            elif self.parameters_list_type[i] == "Optional":
+                if value == "":
+                    self.param[param] = None
+                else:
+                    self.param[param] = float(value)
             else:
                 raise TypeError(
                     f"Unknown parameter type: {self.parameters_list_type[i]}"
