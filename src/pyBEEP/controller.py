@@ -27,6 +27,7 @@ from pyBEEP.measurement_modes.waveforms_pot import (
     linear_sweep,
     cyclic_voltammetry,
     potential_steps,
+    capacitance_from_cv,
 )
 from pyBEEP.measurement_modes.waveforms_gal import (
     single_point,
@@ -51,6 +52,7 @@ from pyBEEP.measurement_modes.waveform_params import (
     LinearGalvanostaticSweepParams,
     CyclicGalvanostaticParams,
     OCPParams,
+    CapacitanceParams
 )
 from pyBEEP.measurement_modes.measurement_modes import (
     ModeName,
@@ -128,6 +130,12 @@ class PotentiostatController:
                 "mode_type": ControlMode.OCP,
                 "waveform_func": ocp_waveform,
                 "param_class": OCPParams,
+                "pid": False,
+            },
+            "CDL": {
+                "mode_type": ControlMode.POT,
+                "waveform_func": capacitance_from_cv,
+                "param_class": CapacitanceParams,
                 "pid": False,
             },
         }
@@ -367,6 +375,22 @@ class PotentiostatController:
             self._run_measurement(write_func, filepath, waveform, sampling_interval)
 
         self.last_plot_path = filepath
+
+        if mode.upper() == "CDL":
+            try:
+                from pyBEEP.utils.postprocess.CdlAnalysis import estimate_cdl_from_csv
+                result = estimate_cdl_from_csv(
+                    filepath,
+                    vertex_a=params.vertex_a,
+                    vertex_b=params.vertex_b,
+                )
+                logger.info(
+                    f"Cdl (mean ± std): {result['cdl_mean']:.3e} F ± {result['cdl_std']:.3e} "
+                    f"aus {len(result['per_cycle'])} Zyklen/Blöcken. "
+                    f"Details: {result['csv']}"
+                )
+            except Exception as e:
+                logger.warning(f"CDL-Auswertung fehlgeschlagen: {e}")
 
     def _read_operation(
         self,

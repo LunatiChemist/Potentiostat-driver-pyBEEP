@@ -152,3 +152,57 @@ def cyclic_voltammetry(
         time=time,
         cycle=cycle,
     )
+
+
+def capacitance_from_cv(
+    vertex_a: float,
+    vertex_b: float,
+    scan_rates: list[float],
+    cycles_per_rate: int = 2,
+    rest_time: float = 0.0,
+    start: float | None = None,
+    end: float | None = None,
+) -> CyclicPotenOutput:
+    """Erzeuge eine CV-Sequenz zwischen vertex_a und vertex_b für mehrere Scanraten.
+    Nutz vorhandenes cyclic_voltammetry, keine Duplikate.
+    """
+    v_start = vertex_a if start is None else start
+    v_end = vertex_a if end is None else end
+
+    pot_segments = []
+    cycle_segments = []
+    cycle_offset = 0
+
+    for v in scan_rates:
+        wf = cyclic_voltammetry(
+            start=v_start,
+            vertex1=vertex_b,
+            vertex2=vertex_a,
+            end=v_end,
+            scan_rate=v,
+            cycles=cycles_per_rate,
+        )
+        pot_segments.append(wf.applied_potential)
+        cycle_segments.append(wf.cycle + cycle_offset)
+        cycle_offset = int(cycle_segments[-1][-1])
+
+        if rest_time > 0:
+            rest = constant_waveform(v_start, rest_time)
+            pot_segments.append(rest.applied_potential)
+            cycle_segments.append(
+                np.full(rest.applied_potential.shape, cycle_offset, dtype=np.int32)
+            )
+
+    applied_potential = (
+        np.concatenate(pot_segments) if pot_segments else np.array([], dtype=np.float32)
+    )
+    cycle = (
+        np.concatenate(cycle_segments)
+        if cycle_segments
+        else np.array([], dtype=np.int32)
+    )
+    time = np.arange(len(applied_potential)) * POINT_INTERVAL
+
+    return CyclicPotenOutput(
+        applied_potential=applied_potential, time=time, cycle=cycle
+    )

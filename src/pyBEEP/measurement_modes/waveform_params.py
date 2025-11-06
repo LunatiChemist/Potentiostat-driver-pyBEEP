@@ -1,5 +1,5 @@
 from pydantic import BaseModel
-from typing import List
+from typing import List, Optional
 
 # --- Potentiostatic waveform parameters ---
 
@@ -62,3 +62,13 @@ class CyclicGalvanostaticParams(BaseModel):
 # --- OCP waveform parameters ---
 class OCPParams(BaseModel):
     duration: float
+
+# --- Capacitance (Cdl) parameters ---
+class CapacitanceParams(BaseModel):
+    vertex_a: float
+    vertex_b: float
+    scan_rates: List[float]
+    cycles_per_rate: int = 2
+    rest_time: float = 0.0
+    start: Optional[float] = None
+    end: Optional[float] = None

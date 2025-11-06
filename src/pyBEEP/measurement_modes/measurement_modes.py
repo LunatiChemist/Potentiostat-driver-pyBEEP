@@ -13,6 +13,7 @@ class ModeName(str, Enum):
     GCV = "GCV"
     STEPSEQ = "STEPSEQ"
     OCP = "OCP"
+    CDL = "CDL"
 
 
 class ControlMode(str, Enum):
