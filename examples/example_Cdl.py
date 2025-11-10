@@ -3,7 +3,7 @@ import logging
 from pyBEEP import (
     setup_logging,
     connect_to_potentiostat,
-    #plot_cdl_points
+    plot_cdl_points
 )
 
 setup_logging(level=logging.INFO)
@@ -30,4 +30,10 @@ controller.apply_measurement(
     mode="CDL", params=cdl_params, tia_gain=0, filename=cdl_filename, folder=folder
 )
 
-csv_path = os.path.join(folder, cdl_filename)
+cdl_file = os.path.join(folder, "test_CDL_cdl.csv")
+
+plot_cdl_points(
+    cdl_file,
+    figpath=cdl_file.replace(".csv", ".png"),
+    show=True,
+)

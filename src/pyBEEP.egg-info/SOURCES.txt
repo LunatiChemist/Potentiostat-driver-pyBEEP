@@ -26,4 +26,6 @@ src/pyBEEP/utils/constants.py
 src/pyBEEP/utils/utils.py
 src/pyBEEP/utils/postprocess/CdlAnalysis.py
 src/pyBEEP/utils/postprocess/__init__.py
+tests/test_capacitance.py
 tests/test_init.py
+tests/test_seren.py
