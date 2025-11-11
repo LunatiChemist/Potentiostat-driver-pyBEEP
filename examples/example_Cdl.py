@@ -18,7 +18,6 @@ cdl_params = {
     "vertex_a": -2.0,
     "vertex_b": 2.0,
     "scan_rates": [1.0, 0.9, 0.8, 0.7, 0.6, 0.5],  # [V/s]
-    "cycles_per_rate": 2,
     "rest_time": 5.0,
     "start": None,  # optional
     "end": None,  # optional
