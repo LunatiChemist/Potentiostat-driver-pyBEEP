@@ -23,7 +23,7 @@ def compute_Cedl_from_folder(folder_path, well_number=1, target_voltage=0.1):
         raise FileNotFoundError("Keine test_CV_*.csv Dateien im angegebenen Ordner gefunden.")
 
     # --- Feste Reihenfolge von 1.0 bis 0.1 ---
-    scanrate_order = ["1.0", "0.9", "0.8", "0.7", "0.4", "0.3", "0.1"]
+    scanrate_order = ["1.0", "0.9", "0.8", "0.7", "0.5"]
 
     # sortiere csv_files nach Reihenfolge oben, falls enthalten
     csv_files = [f for rate in scanrate_order for f in csv_files if f"_{rate}" in f]
@@ -381,6 +381,18 @@ def compute_Cdl_from_folder_pro(
 
 
 if __name__ == "__main__":
-    # compute_Cedl_from_folder(r"results\example_CV", well_number=1, target_voltage=0.0)
-    res = compute_Cdl_from_folder_pro(r"results\example_CV")
+    folder = os.path.join("results", "example_CV", "known_10")
+    compute_Cedl_from_folder(folder, well_number=1, target_voltage=0.0)
+
+    res = compute_Cdl_from_folder_pro(
+        folder,
+        scanrate_order=(
+            "1.0",
+            "0.9",
+            "0.8",
+            "0.7",
+            "0.6",
+            "0.5",
+        ),
+    )
     print(res["Cdl_mF"], "mF")
