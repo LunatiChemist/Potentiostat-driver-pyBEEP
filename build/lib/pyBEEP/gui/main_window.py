@@ -80,6 +80,13 @@ class GUI:
             self.root, width=20, textvariable=self.sampling_interval
         )
 
+        # Optional Parameters - Charge Cut-off
+        self.charge_cutoff = tk.StringVar()
+        self.charge_cutoff_label = tk.Label(self.root, text="Charge cut-off (C):")
+        self.charge_cutoff_entry = tk.Entry(
+            self.root, width=20, textvariable=self.charge_cutoff
+        )
+
         # Optional Parameters - Filename Out
         self.filename = tk.StringVar()
         self.filename_label = tk.Label(self.root, text="Output Filename")
@@ -135,14 +142,18 @@ class GUI:
         )
         self.sampling_interval_entry.grid(row=3, column=1, padx=5, pady=(0, 10))
 
+        # Optional Parameters - Charge Cut-off
+        self.charge_cutoff_label.grid(row=4, column=0, padx=5, pady=(0, 10), sticky="e")
+        self.charge_cutoff_entry.grid(row=4, column=1, padx=5, pady=(0, 10), sticky="w")
+
         # Optional Parameters - Filename Out
-        self.filename_label.grid(row=4, column=0, padx=5, pady=(0, 10), sticky="e")
-        self.filename_entry.grid(row=4, column=1, padx=5, pady=(0, 10), sticky="w")
+        self.filename_label.grid(row=5, column=0, padx=5, pady=(0, 10), sticky="e")
+        self.filename_entry.grid(row=5, column=1, padx=5, pady=(0, 10), sticky="w")
 
         # Optional Parameters - Folder Out
-        self.folder_label.grid(row=5, column=0, padx=5, pady=(0, 10), sticky="e")
-        self.folder_entry.grid(row=5, column=1, padx=5, pady=(0, 10), sticky="w")
-        self.folder_button.grid(row=5, column=2, padx=5, sticky="w")
+        self.folder_label.grid(row=6, column=0, padx=5, pady=(0, 10), sticky="e")
+        self.folder_entry.grid(row=6, column=1, padx=5, pady=(0, 10), sticky="w")
+        self.folder_button.grid(row=6, column=2, padx=5, sticky="w")
 
     def select_folder(self):
         path = filedialog.askdirectory(title="Select Output Folder")
@@ -242,6 +253,10 @@ class GUI:
             folder = None
         else:
             folder = self.folder.get()
+        if self.charge_cutoff.get() == "":
+            charge_cutoff_c = None
+        else:
+            charge_cutoff_c = float(self.charge_cutoff.get())
 
         self.controller.apply_measurement(
             self.mode,
@@ -250,6 +265,7 @@ class GUI:
             sampling_interval=sampling_interval,
             filename=filename,
             folder=folder,
+            charge_cutoff_c=charge_cutoff_c,
         )
 
     def import_parameter(self):
