@@ -68,7 +68,6 @@ class CapacitanceParams(BaseModel):
     vertex_a: float
     vertex_b: float
     scan_rates: List[float]
-    cycles_per_rate: int = 2
     rest_time: float = 0.0
     start: Optional[float] = None
     end: Optional[float] = None

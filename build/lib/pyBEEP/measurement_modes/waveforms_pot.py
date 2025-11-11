@@ -158,13 +158,36 @@ def capacitance_from_cv(
     vertex_a: float,
     vertex_b: float,
     scan_rates: list[float],
-    cycles_per_rate: int = 2,
     rest_time: float = 0.0,
     start: float | None = None,
     end: float | None = None,
 ) -> CyclicPotenOutput:
-    """Erzeuge eine CV-Sequenz zwischen vertex_a und vertex_b für mehrere Scanraten.
-    Nutz vorhandenes cyclic_voltammetry, keine Duplikate.
+    """
+    Build a capacitance (Cdl) waveform sequence using cyclic voltammetry segments.
+
+    Each scan rate is run as a pair of CV cycles (conditioning + measurement).
+    The first cycle is discarded during analysis, and only the second is evaluated.
+
+    Parameters
+    ----------
+    vertex_a : float
+        Lower vertex potential (V vs. reference).
+    vertex_b : float
+        Upper vertex potential (V vs. reference).
+    scan_rates : list[float]
+        List of scan rates (V/s) for which the two-cycle CV blocks are generated.
+    rest_time : float, optional
+        Optional rest time (s) at vertex_a between consecutive scan-rate blocks.
+    start : float or None, optional
+        Optional override for starting potential (defaults to vertex_a).
+    end : float or None, optional
+        Optional override for final potential (defaults to vertex_a).
+
+    Returns
+    -------
+    CyclicPotenOutput
+        Object containing the concatenated applied-potential waveform,
+        time axis, and cycle numbers for the full Cdl measurement sequence.
     """
     v_start = vertex_a if start is None else start
     v_end = vertex_a if end is None else end
@@ -180,7 +203,7 @@ def capacitance_from_cv(
             vertex2=vertex_a,
             end=v_end,
             scan_rate=v,
-            cycles=cycles_per_rate,
+            cycles=2,
         )
         pot_segments.append(wf.applied_potential)
         cycle_segments.append(wf.cycle + cycle_offset)

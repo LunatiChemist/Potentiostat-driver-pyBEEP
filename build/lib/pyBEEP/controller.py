@@ -385,12 +385,10 @@ class PotentiostatController:
                     vertex_b = getattr(params, "vertex_a", 0.0),
                 )
                 logger.info(
-                    f"C_dl = {result['Cdl_mF']:.3f} mF  "
-                    f"(slope={result['Cdl_F']:.3e} F, R²={result['R2']:.3f})  "
-                    f"from {len(result['per_cycle'])} cycles. "
-                    f"Points: {result['csv']}"
+                    f"C_dl = {result['Cdl_mF']:.3f} mF "
+                    f"(slope={result['Cdl_F']:.3e} F, R²={result['R2']:.3f}); "
+                    f"points={result['n_points']}  file={result['csv']}"
                 )
-
             except Exception as e:
                 logger.warning(f"CDL analysis failed: {e}")
     def _read_operation(
