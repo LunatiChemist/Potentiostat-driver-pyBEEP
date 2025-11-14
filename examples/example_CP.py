@@ -6,7 +6,7 @@ from pyBEEP import (
     connect_to_potentiostat,
 )
 
-setup_logging(level=logging.INFO)
+setup_logging(level=logging.DEBUG)
 
 controller = connect_to_potentiostat()
 

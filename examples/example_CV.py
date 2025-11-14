@@ -6,11 +6,11 @@ from pyBEEP import (
     connect_to_potentiostat,
 )
 
-setup_logging(level=logging.INFO)
+setup_logging(level=logging.DEBUG)
 
 controller = connect_to_potentiostat()
-for v in [0.5,0.6,0.7,0.8,0.9,1.0]:
-    folder = os.path.join("results", "example_CV", "known_10")
+for v in [0.5]:
+    folder = os.path.join("results", "example_CV", "test_charge_cutoff")
     os.makedirs(folder, exist_ok=True)
 
     # --- 3. Cyclic Voltammetry (CV) ---
@@ -29,6 +29,7 @@ for v in [0.5,0.6,0.7,0.8,0.9,1.0]:
         tia_gain=0,
         filename=f"test_CV_{v}.csv",
         folder=folder,
+        charge_cutoff_c=0.04
     )
     # If you know scan_points per cycle, set it below:
     plot_cv_cycles(cv_file, figpath=cv_file.replace(".csv", ".png"), show=True, cycles=2)
