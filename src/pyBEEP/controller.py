@@ -683,6 +683,9 @@ class PotentiostatController:
                         accumulated_charge += float(
                             np.sum(rd_list[:, 0]) * POINT_INTERVAL
                         )
+                        logger.info(
+                            f"Charge |Q| = {abs(accumulated_charge):.6g} C (limit {charge_cutoff_c} C)."
+                        )
                         if abs(accumulated_charge) >= charge_cutoff_c:
                             cutoff_reached = True
                             break
