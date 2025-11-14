@@ -1,0 +1,16 @@
+Parameter File for Experiment Run with pyBEEP - 0.1.2
+
+Mode : CDL
+
+vertex_a (float) = 0.5
+vertex_b (float) = -0.5
+scan_rates (List) = [0.5,0.6,0.7,0.8,0.9,1.0]
+cycles_per_rate (int) = 2
+rest_time (float) = 5.0
+start (Optional) = 0.5
+end (Optional) = 0.5
+
+Tia Gain (int) = 
+Sampling Interval (float) = 
+Output Filename = test_Cdl_known10
+Output Folder = C:\Users\LunaP\Documents\GitHub\Potentiostat-driver-pyBEEP\results\example_Cdl

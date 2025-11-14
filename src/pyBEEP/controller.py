@@ -41,6 +41,7 @@ from pyBEEP.utils.constants import (
     REG_WRITE_ADDR_PID,
     REG_WRITE_ADDR_POT,
     BUSSY_DLAY_NS,
+    POINT_INTERVAL,
 )
 from pyBEEP.measurement_modes.waveform_params import (
     ConstantWaveformParams,
@@ -306,6 +307,7 @@ class PotentiostatController:
         sampling_interval: int | float | None = None,
         filename: str | None = None,
         folder: str | None = None,
+        charge_cutoff_c: float | None = None,
     ):
         """
         Function for performing electrochemical measurements with the potentiostat. Takes electrochemical method
@@ -318,6 +320,7 @@ class PotentiostatController:
             sampling_interval (int | float | None): If set, will average every N rows before saving. Defaults to None (no reduction).
             filename (str | None, optional): File path for storing measurement data. If None, a default is generated.
             folder (str | None, optional): Folder for storing the file. If None, a pop-up will ask for the folder.
+            charge_cutoff_c (float | None): Optional absolute charge limit in Coulombs. Stops the measurement once |Q| exceeds this value.
 
         Raises:
             ValueError: If the mode is unknown or parameter validation fails.
@@ -357,12 +360,14 @@ class PotentiostatController:
                     self._read_write_data_pid_active,
                     waveform=waveform,
                     tia_gain=tia_gain,
+                    charge_cutoff_c=charge_cutoff_c,
                 )
             case "POT":
                 write_func = partial(
                     self._read_write_data_pid_inactive,
                     waveform=waveform,
                     tia_gain=tia_gain,
+                    charge_cutoff_c=charge_cutoff_c,
                 )
             case "OCP":
                 write_func = partial(
@@ -461,6 +466,7 @@ class PotentiostatController:
         waveform: GalvanoOutput,
         tia_gain: int | None = 0,
         n_register: int | None = 120,
+        charge_cutoff_c: float | None = None,
     ) -> None:
         """
         Perform a measurement using PID-regulated current mode. The function handles writing commands
@@ -472,6 +478,7 @@ class PotentiostatController:
             waveform (np.ndarray): Array of [current, duration] pairs to be applied sequentially.
             tia_gain (int | None): TIA gain setting for measurement.
             n_register (int | None): Number of data words to read per register operation.
+            charge_cutoff_c (float | None): Optional absolute charge limit in Coulombs.
 
         Raises:
             minimalmodbus.SlaveReportedException: If serial communication with the potentiostat fails repeatedly.
@@ -502,11 +509,15 @@ class PotentiostatController:
             "transmission_st": monotonic_ns(),
         }
 
+        accumulated_charge = 0.0  # [C]
+        cutoff_reached = False
         global_start_ns = monotonic_ns()
 
         for current, duration, length in zip(
             waveform.current_steps, waveform.duration_steps, waveform.length_steps
         ):
+            if cutoff_reached:
+                break
             target = np.array(
                 [
                     current,
@@ -521,7 +532,7 @@ class PotentiostatController:
             )  # Send data
 
             # Start collecting
-            while params["rd_tx_reg"] < length:
+            while (params["rd_tx_reg"] < length) and (not cutoff_reached):
                 st = monotonic_ns()
                 rd_data = self._read_operation(st, params, n_register)
                 if rd_data:
@@ -529,7 +540,18 @@ class PotentiostatController:
                     data_queue.put(rd_list)
                     params["rd_tx_reg"] += len(rd_list)
                     params["rd_err_cnt"] = 0
-
+                    if charge_cutoff_c is not None:
+                        accumulated_charge += float(
+                            np.sum(rd_list[:, 0]) * POINT_INTERVAL
+                        )
+                        logger.debug(
+                            f"Charge |Q| = {abs(accumulated_charge):.6g} C (limit {charge_cutoff_c} C)."
+                        )
+                        if abs(accumulated_charge) >= charge_cutoff_c:
+                            cutoff_reached = True
+                            break
+            # reset read counter for next PID step
+            params["rd_tx_reg"] = 0
         self._teardown_measurement()
 
         total_time_ns = monotonic_ns() - global_start_ns
@@ -543,6 +565,10 @@ class PotentiostatController:
         logger.info(
             f"Send: {params['wr_tx_reg']}, Read: {params['rd_tx_reg']}, Diff: {params['rd_tx_reg'] - params['wr_tx_reg'] * 2}\n"
         )
+        if cutoff_reached:
+            logger.info(
+                f"Charge cutoff reached at |Q| = {abs(accumulated_charge):.6g} C (limit {charge_cutoff_c} C)."
+            )
 
     def _read_write_data_pid_inactive(
         self,
@@ -550,6 +576,7 @@ class PotentiostatController:
         waveform: PotenOutput,
         tia_gain: int | None = 0,
         n_register: int = 120,
+        charge_cutoff_c: float | None = None,
     ) -> None:
         """
         Perform a measurement using standard voltage-controlled mode. The function handles writing
@@ -561,6 +588,7 @@ class PotentiostatController:
             waveform (PotenOutput): Array of potential values to be applied over time.
             tia_gain (int | None): TIA gain setting for measurement.
             n_register (int): Number of data words to read per register operation.
+            charge_cutoff_c (float | None): Optional absolute charge limit in Coulombs.
 
         Raises:
             minimalmodbus.SlaveReportedException: If serial communication with the potentiostat fails repeatedly.
@@ -599,6 +627,9 @@ class PotentiostatController:
             "transmission_st": monotonic_ns(),
         }
 
+        accumulated_charge = 0.0  # [C]
+        cutoff_reached = False
+
         # Generate numpy array to send
         y_bytes = waveform.applied_potential.tobytes(order="C")
         write_list = np.frombuffer(y_bytes, np.uint16)
@@ -618,8 +649,12 @@ class PotentiostatController:
         params["transmission_st"] = monotonic_ns()
 
         post_read_attempts = 0
-        while (post_read_attempts < 3) or (
-            (params["rd_tx_reg"] / params["wr_tx_reg"] / 2) < 1.0
+        while (not cutoff_reached) and (
+            (post_read_attempts < 3)
+            or (
+                (params["rd_tx_reg"] / max(params["wr_tx_reg"], 1) / 2)
+                < 1.0
+            )
         ):
             st = monotonic_ns()
             if i < n_items:  # Writing
@@ -646,6 +681,16 @@ class PotentiostatController:
                     data_queue.put(rd_list)
                     params["rd_tx_reg"] += len(rd_data)
                     params["rd_err_cnt"] = 0
+                    if charge_cutoff_c is not None:
+                        accumulated_charge += float(
+                            np.sum(rd_list[:, 0]) * POINT_INTERVAL
+                        )
+                        logger.debug(
+                            f"Charge |Q| = {abs(accumulated_charge):.6g} C (limit {charge_cutoff_c} C)."
+                        )
+                        if abs(accumulated_charge) >= charge_cutoff_c:
+                            cutoff_reached = True
+                            break
             if i >= n_items:
                 post_read_attempts += 1
 
@@ -662,6 +707,10 @@ class PotentiostatController:
         logger.info(
             f"Actual points expected to read: {2 * params['wr_tx_reg']}, actual read: {params['rd_tx_reg']}, extra read operations: {int((params['rd_tx_reg'] - params['wr_tx_reg'] * 2) / 120)}\n"
         )
+        if cutoff_reached:
+            logger.info(
+                f"Charge cutoff reached at |Q| = {abs(accumulated_charge):.6g} C (limit {charge_cutoff_c} C)."
+            )
 
 
 def connect_to_potentiostat():
