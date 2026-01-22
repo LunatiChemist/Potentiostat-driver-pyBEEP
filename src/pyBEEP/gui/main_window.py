@@ -222,11 +222,11 @@ class GUI:
             elif self.parameters_list_type[i] == "int":
                 self.param[param] = int(float(value))
             elif self.parameters_list_type[i] == "List":
-                val = ast.literal_eval(value)
-                if not isinstance(val, list):
-                    messagebox.showerror("Error", f"{param} (List): {val}, is not a List Type")
+                lst = [float(x.strip()) for x in value.split(",")]
+                if not isinstance(lst, list):
+                    messagebox.showerror("Error", f"{param} (List): {lst}, is not a List Type")
                     return
-                self.param[param] = val
+                self.param[param] = lst
             elif self.parameters_list_type[i] == "Optional":
                 if value == "":
                     self.param[param] = None
